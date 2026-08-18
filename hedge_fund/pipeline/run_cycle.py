@@ -113,6 +113,7 @@ def run_cycle(
     positions_after = {t: p.shares for t, p in broker.positions().items()}
     cash_after = broker.cash()
     nav = cash_after + sum(s * marks[t] for t, s in positions_after.items())
+    total_commission = sum(f.commission for f in fills)
 
     return CycleRecord(
         fund=spec.name,
@@ -132,6 +133,7 @@ def run_cycle(
         positions=positions_after,
         cash=cash_after,
         nav=nav,
+        total_commission=total_commission,
     )
 
 

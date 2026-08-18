@@ -47,6 +47,7 @@ class FundBacktestMetrics(BaseModel):
     excess_return_pct: float          # fund total minus benchmark total
     n_cycles: int
     n_orders: int
+    total_costs: float
 
 
 class FundBacktestResult(BaseModel):
@@ -75,6 +76,8 @@ def backtest_fund(
     data_client: DataClient,
     universe: list[str],
     *,
+    commission_per_share: float = 0.0,
+    slippage_bps: float = 0.0,
     on_cycle: Callable[[int, int, CycleRecord], None] | None = None,
 ) -> FundBacktestResult:
     """Run *fund* over *universe* through history from *start* to *end*.
@@ -99,7 +102,11 @@ def backtest_fund(
         )
     grid = rebalance_grid(sorted(closes), spec.rebalance)
 
-    broker = SimBroker(cash=spec.capital)
+    broker = SimBroker(
+        cash=spec.capital,
+        commission_per_share=commission_per_share,
+        slippage_bps=slippage_bps,
+    )
     records: list[CycleRecord] = []
     nav: list[float] = []
     benchmark_nav: list[float] = []
@@ -192,6 +199,12 @@ def _metrics(
 
     benchmark_return = benchmark_nav[-1] / capital - 1
 
+    total_commission = sum(f.commission for r in records for f in r.fills)
+    total_slippage = 0.0
+    for record in records:
+        for order, fill in zip(record.orders, record.fills):
+            total_slippage += abs(fill.price - order.price) * order.quantity
+
     return FundBacktestMetrics(
         total_return_pct=round(total, 6),
         annualized_return_pct=round(annualized, 6),
@@ -201,4 +214,5 @@ def _metrics(
         excess_return_pct=round(total - benchmark_return, 6),
         n_cycles=len(nav),
         n_orders=sum(len(r.orders) for r in records),
+        total_costs=round(total_commission + total_slippage, 2),
     )

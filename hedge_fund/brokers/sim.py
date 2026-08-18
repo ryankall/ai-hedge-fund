@@ -19,8 +19,15 @@ from hedge_fund.brokers.models import Fill, Order, Position
 class SimBroker:
     """In-memory broker: signed positions plus a cash balance."""
 
-    def __init__(self, cash: float) -> None:
+    def __init__(
+        self,
+        cash: float,
+        commission_per_share: float = 0.0,
+        slippage_bps: float = 0.0,
+    ) -> None:
         self._cash = cash
+        self._commission_per_share = commission_per_share
+        self._slippage_bps = slippage_bps
         self._shares: dict[str, int] = {}
 
     def positions(self) -> dict[str, Position]:
@@ -41,11 +48,18 @@ class SimBroker:
             )
 
         if order.side == "buy":
+            fill_price = order.price * (1 + self._slippage_bps / 10000)
+        else:
+            fill_price = order.price * (1 - self._slippage_bps / 10000)
+
+        commission = self._commission_per_share * order.quantity
+
+        if order.side == "buy":
             self._shares[order.ticker] = self._shares.get(order.ticker, 0) + order.quantity
-            self._cash -= order.quantity * order.price
+            self._cash -= order.quantity * fill_price + commission
         else:
             self._shares[order.ticker] = self._shares.get(order.ticker, 0) - order.quantity
-            self._cash += order.quantity * order.price
+            self._cash += order.quantity * fill_price - commission
 
         if self._shares[order.ticker] == 0:
             del self._shares[order.ticker]
@@ -54,5 +68,6 @@ class SimBroker:
             ticker=order.ticker,
             side=order.side,
             quantity=order.quantity,
-            price=order.price,
+            price=fill_price,
+            commission=commission,
         )

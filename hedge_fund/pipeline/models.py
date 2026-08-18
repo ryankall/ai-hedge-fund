@@ -55,3 +55,4 @@ class CycleRecord(BaseModel):
     positions: dict[str, int]           # signed shares after fills
     cash: float
     nav: float                          # cash + sum(shares * mark)
+    total_commission: float = 0.0
